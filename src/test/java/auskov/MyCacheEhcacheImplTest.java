@@ -20,7 +20,11 @@ public class MyCacheEhcacheImplTest {
 
     @After
     public void tearDown() throws CachePersistenceException {
-        myCache.close();
+        try {
+            myCache.close();
+        } catch (IllegalStateException e) {
+            //that's ok, the cache has already been closed
+        }
     }
 
     @Test
@@ -57,6 +61,18 @@ public class MyCacheEhcacheImplTest {
         assertNull(myCache.get(0));
     }
 
+    @Test
+    public void getShouldThrowAnExceptionIfTheCacheIsClosed() throws CachePersistenceException {
+        Serializable item = "Hello";
+        long id = myCache.put(item);
+        myCache.close();
+        try {
+            myCache.get(id);
+        } catch (IllegalStateException e) {
+            return;
+        }
+        fail();
+    }
 
     @Test
     public void clearShouldWipeAllStoredObjects() {
@@ -73,6 +89,19 @@ public class MyCacheEhcacheImplTest {
         myCache.put("2");
         myCache.clear();
         assertEquals(0, myCache.put("3"));
+    }
+
+    @Test
+    public void clearShouldThrowAnExceptionIfTheCacheIsClosed() throws CachePersistenceException {
+        myCache.put("1");
+        myCache.put("2");
+        myCache.close();
+        try {
+            myCache.clear();
+        } catch (IllegalStateException e) {
+            return;
+        }
+        fail();
     }
 
     @Test
@@ -95,19 +124,46 @@ public class MyCacheEhcacheImplTest {
     }
 
     @Test
-    public void closeShouldNotThrowAnExceptionIfUsedTwice() {
+    public void removeShouldIfTheCacheIsClosed() throws CachePersistenceException {
+        myCache.put("123");
+        long idToRemove = myCache.put("234");
+        myCache.put("345");
+        myCache.close();
+        try {
+            myCache.remove(idToRemove);
+        } catch (IllegalStateException e) {
+            return;
+        }
+        fail();
+    }
+
+    @Test
+    public void closeShouldThrowAnExceptionIfUsedTwice() throws CachePersistenceException {
+        myCache.close();
         try {
             myCache.close();
-            myCache.close();
-        } catch (Throwable throwable) {
-            fail();
+        } catch (IllegalStateException e) {
+            return;
         }
+        fail();
     }
 
     @Test
     public void containsKeyShouldReturnTrueIfTheKeyExists() {
         long id = myCache.put("1");
         assertTrue(myCache.containsKey(id));
+    }
+
+    @Test
+    public void containsKeyShouldThrowAnExceptionIfTheCacheIsClosed() throws CachePersistenceException {
+        long id = myCache.put("1");
+        myCache.close();
+        try {
+            myCache.containsKey(id);
+        } catch (IllegalStateException e) {
+            return;
+        }
+        fail();
     }
 
     @Test

@@ -114,7 +114,10 @@ public class MyCacheEhcacheImpl implements MyCache {
             if(needToCleanFS) {
                 ((PersistentCacheManager) cacheManager).destroy();
             }
+        } else {
+            throw new IllegalStateException("The cache is already closed");
         }
+
     }
 
     @Override
