@@ -173,5 +173,5 @@ public abstract class AbstractMyCacheTest {
         assertFalse(myCache.containsKey(id));
     }
 
-    abstract MyCache createANewCache() throws IOException;
+    protected abstract MyCache createANewCache() throws IOException;
 }

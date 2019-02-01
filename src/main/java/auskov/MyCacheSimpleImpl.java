@@ -54,7 +54,7 @@ public class MyCacheSimpleImpl implements MyCache {
             throw new IllegalStateException("The cache is closed!");
         }
         levelOne.put(nextId, object);
-        if("time-to-live".equals(expirationPolicy) || "time-to-idle".equals(expirationPolicy)) {
+        if ("time-to-live".equals(expirationPolicy) || "time-to-idle".equals(expirationPolicy)) {
             levelOne.setDeadline(nextId, System.currentTimeMillis() + expirationMillis);
         }
         return nextId++;
@@ -62,8 +62,11 @@ public class MyCacheSimpleImpl implements MyCache {
 
     @Override
     public Object get(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         Object result = levelOne.get(key);
-        if(result != null && "time-to-idle".equals(expirationPolicy)) {
+        if (result != null && "time-to-idle".equals(expirationPolicy)) {
             levelOne.setDeadline(key, System.currentTimeMillis() + expirationMillis);
         }
         return result;
@@ -71,28 +74,40 @@ public class MyCacheSimpleImpl implements MyCache {
 
     @Override
     public void clear() {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         levelOne.clear();
         nextId = 0;
     }
 
     @Override
     public void remove(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         levelOne.remove(key);
     }
 
     @Override
     public void close() {
-        if (open) {
-            levelOne = null;
-            open = false;
-            if (needToCleanFS) {
-// todo               ((PersistentCacheManager) cacheManager).destroy();
-            }
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
         }
+
+        levelOne = null;
+        open = false;
+        if (needToCleanFS) {
+// todo               ((PersistentCacheManager) cacheManager).destroy();
+        }
+
     }
 
     @Override
     public boolean containsKey(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         return levelOne.containsKey(key);
     }
 
