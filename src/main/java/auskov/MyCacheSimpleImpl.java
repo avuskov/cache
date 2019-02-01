@@ -2,9 +2,7 @@ package auskov;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.InvalidPropertiesFormatException;
-import java.util.Map;
 import java.util.Properties;
 
 public class MyCacheSimpleImpl implements MyCache {

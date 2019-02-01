@@ -46,11 +46,8 @@ public class FirstTierCache implements CacheTier {
                         .getKey());
             }
         }
-        if (values.containsKey(key)) {
-            incrementWeight(key);
-        } else {
-            weights.put(key, 0L);
-        }
+
+        weights.put(key, 0L);
         values.put(key, object);
         deadlines.put(key, Long.MAX_VALUE);
     }
@@ -125,5 +122,9 @@ public class FirstTierCache implements CacheTier {
             return deadlines.get(key);
         }
         return 0;
+    }
+
+    void setCurrentTimeSupplier(LongSupplier timeSupplier) {
+        this.timeSupplier = timeSupplier;
     }
 }
