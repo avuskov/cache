@@ -54,14 +54,19 @@ public class FirstTierCache implements CacheTier {
 
     @Override
     public Object get(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         if (!values.containsKey(key)) {
             return null;
         }
-        if (timeSupplier.getAsLong() < deadlines.get(key)) {
-            incrementWeight(key);
-            return values.get(key);
+        if (timeSupplier.getAsLong() >= deadlines.get(key)) {
+            remove(key);
+            return null;
         }
-        return null;
+        incrementWeight(key);
+        return values.get(key);
+
     }
 
     @Override

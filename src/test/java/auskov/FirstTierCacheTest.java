@@ -122,8 +122,64 @@ public class FirstTierCacheTest {
     }
 
     @Test
-    public void get() {
+    public void getShouldThrowAnExceptionIfTheCacheIsClosed() {
+        long key = 0;
+        firstTierCache.put(key, "Something");
+        firstTierCache.close();
+        try {
+            firstTierCache.get(key);
+        } catch (IllegalStateException e) {
+            return;
+        }
         fail();
+    }
+
+    @Test
+    public void getShouldReturnAStoredObject() {
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        long key = 0;
+        Serializable theObject = "The Object";
+        firstTierCache.put(key, theObject);
+        firstTierCache.setDeadline(key, 101L);
+        assertEquals(theObject, firstTierCache.get(key));
+    }
+
+    @Test
+    public void getShouldReturnNullIfTheObjectIsMissing() {
+        long missingObjectKey = 0;
+        assertNull(firstTierCache.get(missingObjectKey));
+    }
+
+    @Test
+    public void getShouldReturnNullIfTheObjectHasExpired() {
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        long keyExpiredOne = 0;
+        long keyExpiredTwo = 1;
+        firstTierCache.put(keyExpiredOne, "Expired Object");
+        firstTierCache.setDeadline(keyExpiredOne, 100L);
+        assertNull(firstTierCache.get(keyExpiredOne));
+        firstTierCache.put(keyExpiredTwo, "Expired Object");
+        firstTierCache.setDeadline(keyExpiredTwo, 99L);
+        assertNull(firstTierCache.get(keyExpiredTwo));
+    }
+
+    @Test
+    public void getShouldIncrementTheObjectsWeightIfTheValueIdReturned() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        assertEquals(0, firstTierCache.getWeight(key));
+        firstTierCache.get(key);
+        assertEquals(1, firstTierCache.getWeight(key));
+    }
+
+    @Test
+    public void getShouldRemoveAnExpiredObject() {
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        long key = 0;
+        firstTierCache.put(key, "Expired Object");
+        firstTierCache.setDeadline(key, 100L);
+        firstTierCache.get(key);
+        assertFalse(firstTierCache.containsKey(key));
     }
 
     @Test
