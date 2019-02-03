@@ -71,6 +71,9 @@ public class FirstTierCache implements CacheTier {
 
     @Override
     public void clear() {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         values.clear();
         weights.clear();
         deadlines.clear();
@@ -78,6 +81,9 @@ public class FirstTierCache implements CacheTier {
 
     @Override
     public void remove(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         values.remove(key);
         weights.remove(key);
         deadlines.remove(key);
@@ -85,21 +91,28 @@ public class FirstTierCache implements CacheTier {
 
     @Override
     public void close() {
-        if (open) {
-            values = null;
-            weights = null;
-            deadlines = null;
-            open = false;
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
         }
+        values = null;
+        weights = null;
+        deadlines = null;
+        open = false;
     }
 
     @Override
     public boolean containsKey(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         return values.containsKey(key);
     }
 
     @Override
     public void incrementWeight(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         if (weights.containsKey(key)) {
             long curWeight = weights.get(key);
             weights.put(key, ++curWeight);
@@ -108,6 +121,9 @@ public class FirstTierCache implements CacheTier {
 
     @Override
     public long getWeight(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         if (weights.containsKey(key)) {
             return weights.get(key);
         }
@@ -116,6 +132,9 @@ public class FirstTierCache implements CacheTier {
 
     @Override
     public void setDeadline(long key, long millis) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         if (values.containsKey(key)) {
             deadlines.put(key, millis);
         }
@@ -123,6 +142,9 @@ public class FirstTierCache implements CacheTier {
 
     @Override
     public long getDeadline(long key) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
         if (values.containsKey(key)) {
             return deadlines.get(key);
         }

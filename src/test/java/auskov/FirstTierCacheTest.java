@@ -13,15 +13,19 @@ public class FirstTierCacheTest {
     private FirstTierCache firstTierCache;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         Properties props = new Properties();
         props.setProperty("cache.size.in.memory.entries", "10");
         firstTierCache = new FirstTierCache(props);
     }
 
     @After
-    public void tearDown() throws Exception {
-        firstTierCache.close();
+    public void tearDown() {
+        try {
+            firstTierCache.close();
+        } catch (IllegalStateException e) {
+            //already closed
+        }
     }
 
     @Test
@@ -63,7 +67,7 @@ public class FirstTierCacheTest {
     }
 
     @Test
-    public void putShouldEvictTheExpiredObjectsFirstIfTheCacheIsFull(){
+    public void putShouldEvictTheExpiredObjectsFirstIfTheCacheIsFull() {
         Properties props = new Properties();
         props.setProperty("cache.size.in.memory.entries", "3");
         firstTierCache = new FirstTierCache(props);
@@ -93,7 +97,7 @@ public class FirstTierCacheTest {
     }
 
     @Test
-    public void putShouldEvictTheLeastFrequentlyAskedObjectsSecondIfTheCacheIsFull(){
+    public void putShouldEvictTheLeastFrequentlyAskedObjectsSecondIfTheCacheIsFull() {
         Properties props = new Properties();
         props.setProperty("cache.size.in.memory.entries", "3");
         firstTierCache = new FirstTierCache(props);
@@ -183,42 +187,274 @@ public class FirstTierCacheTest {
     }
 
     @Test
-    public void clear() {
+    public void clearShouldThrowAnExceptionIfTheCacheIsClosed() {
+        firstTierCache.close();
+        try {
+            firstTierCache.clear();
+        } catch (IllegalStateException e) {
+            return;
+        }
         fail();
     }
 
     @Test
-    public void remove() {
+    public void clearShouldWipeAllStoredObjects() {
+        long keyOne = 0;
+        long keyTwo = 1;
+        firstTierCache.put(keyOne, "1");
+        firstTierCache.put(keyTwo, "2");
+        firstTierCache.get(keyOne);
+        firstTierCache.get(keyTwo);
+        firstTierCache.clear();
+        assertFalse(firstTierCache.containsKey(keyOne));
+        assertFalse(firstTierCache.containsKey(keyTwo));
+        assertEquals(0, firstTierCache.getWeight(keyOne));
+        assertEquals(0, firstTierCache.getWeight(keyTwo));
+        assertEquals(0, firstTierCache.getDeadline(keyOne));
+        assertEquals(0, firstTierCache.getDeadline(keyTwo));
+    }
+
+    @Test
+    public void removeShouldRemoveTheSpecifiedObject() {
+        long keyOne = 0;
+        long keyTwo = 1;
+        firstTierCache.put(keyOne, "1");
+        firstTierCache.put(keyTwo, "2");
+        firstTierCache.get(keyOne);
+        firstTierCache.get(keyTwo);
+        firstTierCache.remove(keyTwo);
+        assertTrue(firstTierCache.containsKey(keyOne));
+        assertFalse(firstTierCache.containsKey(keyTwo));
+        assertNotEquals(0, firstTierCache.getWeight(keyOne));
+        assertEquals(0, firstTierCache.getWeight(keyTwo));
+        assertNotEquals(0, firstTierCache.getDeadline(keyOne));
+        assertEquals(0, firstTierCache.getDeadline(keyTwo));
+    }
+
+    @Test
+    public void closeShouldThrowAnExceptionIfUsedTwice() {
+        firstTierCache.close();
+        try {
+            firstTierCache.close();
+        } catch (IllegalStateException e) {
+            return;
+        }
         fail();
     }
 
     @Test
-    public void close() {
+    public void containsKeyShouldThrowAnExceptionIfTheCacheIsClosed() {
+        firstTierCache.close();
+        try {
+            firstTierCache.close();
+        } catch (IllegalStateException e) {
+            return;
+        }
         fail();
     }
 
     @Test
-    public void containsKey() {
+    public void containsKeyShouldReturnTrueIfTheValueExists() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        assertTrue(firstTierCache.containsKey(key));
+    }
+
+    @Test
+    public void containsKeyShouldReturnFalseIfTheValueDoesNotExist() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        long missingKey = 1;
+        assertFalse(firstTierCache.containsKey(missingKey));
+    }
+
+    @Test
+    public void containsKeyShouldReturnTrueEvenIfTheExistingValueHasExpired() {
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.setDeadline(key, 99L);
+        assertTrue(firstTierCache.containsKey(key));
+    }
+
+    @Test
+    public void incrementWeightShouldThrowAnExceptionIfTheCacheIsClosed() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.close();
+        try {
+            firstTierCache.incrementWeight(key);
+        } catch (IllegalStateException e) {
+            return;
+        }
         fail();
     }
 
     @Test
-    public void incrementWeight() {
+    public void incrementWeightShouldAddOneToTheCurrentWeightOfTheSelectedObject() {
+        long key = 0;
+        long zeroWeightKey = 1;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.put(zeroWeightKey, "An Other Object");
+        assertEquals(0, firstTierCache.getWeight(key));
+        firstTierCache.incrementWeight(key);
+        assertEquals(1, firstTierCache.getWeight(key));
+        firstTierCache.incrementWeight(key);
+        assertEquals(2, firstTierCache.getWeight(key));
+        assertEquals(0, firstTierCache.getWeight(zeroWeightKey));
+    }
+
+    @Test
+    public void incrementWeightShouldDoNothingIfTheObjectDoesNotExist() {
+        long key = 0;
+        firstTierCache.incrementWeight(key);
+        assertEquals(0, firstTierCache.getWeight(key));
+    }
+
+    @Test
+    public void incrementWeightShouldIncrementWeightEvenIfTheObjectHasExpired() {
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.setDeadline(key, 99L);
+        firstTierCache.incrementWeight(key);
+        firstTierCache.incrementWeight(key);
+        assertEquals(2, firstTierCache.getWeight(key));
+    }
+
+    @Test
+    public void getWeightShouldThrowAnExceptionIfTheCacheIsClosed() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.close();
+        try {
+            firstTierCache.getWeight(key);
+        } catch (IllegalStateException e) {
+            return;
+        }
         fail();
     }
 
     @Test
-    public void getWeight() {
+    public void getWeightShouldReturnTheObjectsWeight() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        assertEquals(0, firstTierCache.getWeight(key));
+        firstTierCache.incrementWeight(key);
+        firstTierCache.incrementWeight(key);
+        assertEquals(2, firstTierCache.getWeight(key));
+    }
+
+    @Test
+    public void getWeightShouldReturnZeroIfTheObjectDoesNotExist() {
+        long key = 0;
+        assertEquals(0, firstTierCache.getWeight(key));
+    }
+
+    @Test
+    public void getWeightShouldReturnTheObjectsWeightEvenIfTheObjectHasExpired() {
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.setDeadline(key, 1000L);
+        firstTierCache.incrementWeight(key);
+        firstTierCache.setDeadline(key, 99L);
+        assertEquals(1, firstTierCache.getWeight(key));
+    }
+
+    @Test
+    public void setDeadlineShouldThrowAnExceptionIfTheCacheIsClosed() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.close();
+        try {
+            firstTierCache.setDeadline(key, 100L);
+        } catch (IllegalStateException e) {
+            return;
+        }
         fail();
     }
 
     @Test
-    public void setDeadline() {
+    public void setDeadlineShouldSetTheObjectsDeadline() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        long deadline = System.currentTimeMillis() + 1000;
+        firstTierCache.setDeadline(key, deadline);
+        assertEquals(deadline, firstTierCache.getDeadline(key));
+        deadline += 1234;
+        firstTierCache.setDeadline(key, deadline);
+        assertEquals(deadline, firstTierCache.getDeadline(key));
+    }
+
+    @Test
+    public void setDeadlineShouldDoNothingIfTheObjectDoesNotExist() {
+        long key = 0;
+        long deadline = System.currentTimeMillis() + 1000;
+        firstTierCache.setDeadline(key, deadline);
+        assertEquals(0, firstTierCache.getDeadline(key));
+    }
+
+    @Test
+    public void setDeadlineShouldSetTheObjectsDeadlineEvenIfTheObjectHasExpired() {
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        long key = 0;
+        long deadline = 50L;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.setDeadline(key, deadline);
+        long newDeadline = 150;
+        firstTierCache.setDeadline(key, newDeadline);
+        assertEquals(newDeadline, firstTierCache.getDeadline(key));
+    }
+
+    @Test
+    public void getDeadlineShouldThrowAnExceptionIfTheCacheIsClosed() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.close();
+        try {
+            firstTierCache.getDeadline(key);
+        } catch (IllegalStateException e) {
+            return;
+        }
         fail();
     }
 
     @Test
-    public void getDeadline() {
-        fail();
+    public void getDeadlineShouldReturnZeroIfTheObjectDoesNotExist() {
+        long key = 12;
+        assertEquals(0, firstTierCache.getDeadline(key));
+    }
+
+    @Test
+    public void getDeadlineShouldReturnTheObjectsDeadline() {
+        long key = 0;
+        firstTierCache.put(key, "An Object");
+        assertNotNull(firstTierCache.getDeadline(key));
+        long deadline = System.currentTimeMillis() + 1000;
+        firstTierCache.setDeadline(key, deadline);
+        assertEquals(deadline, firstTierCache.getDeadline(key));
+    }
+
+    @Test
+    public void getDeadlineShouldReturnTheObjectsDeadlineEvenIfTheObjectHasExpired() {
+        long key = 0;
+        long deadline = 50L;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.setDeadline(key, deadline);
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        assertEquals(deadline, firstTierCache.getDeadline(key));
+    }
+
+    @Test
+    public void setCurrentTimeSupplierShouldChangeCurrentTimeDefinition() {
+        long key = 0;
+        Serializable object = "An Object";
+        firstTierCache.put(key, object);
+        firstTierCache.setCurrentTimeSupplier(() -> 99L);
+        firstTierCache.setDeadline(key, 100L);
+        assertEquals(object, firstTierCache.get(key));
+        firstTierCache.setCurrentTimeSupplier(() -> 150L);
+        assertNull(firstTierCache.get(key));
     }
 }
