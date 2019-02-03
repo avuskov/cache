@@ -6,6 +6,7 @@ import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
 
 public class MyCacheSimpleImpl implements MyCache {
+    //todo встроить второй слой
 
     private long nextId;
     private boolean open;
