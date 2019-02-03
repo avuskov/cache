@@ -125,7 +125,7 @@ public abstract class AbstractMyCacheTest {
     }
 
     @Test
-    public void removeShouldIfTheCacheIsClosed() throws CachePersistenceException {
+    public void removeShouldThrowAnExceptionIfTheCacheIsClosed() throws CachePersistenceException {
         myCache.put("123");
         long idToRemove = myCache.put("234");
         myCache.put("345");
