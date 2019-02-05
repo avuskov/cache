@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
 public class FirstTierCache implements CacheTier {
-
+    //todo add logging, make 'put' atomic
     private boolean open;
     private Map<Long, Serializable> values;
     private Map<Long, Long> weights;
@@ -113,7 +113,7 @@ public class FirstTierCache implements CacheTier {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        if (weights.containsKey(key)) {
+        if (containsKey(key)) {
             long curWeight = weights.get(key);
             weights.put(key, ++curWeight);
         }
@@ -124,7 +124,7 @@ public class FirstTierCache implements CacheTier {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        if (weights.containsKey(key)) {
+        if (containsKey(key)) {
             return weights.get(key);
         }
         return 0;
@@ -135,7 +135,7 @@ public class FirstTierCache implements CacheTier {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        if (values.containsKey(key)) {
+        if (containsKey(key)) {
             deadlines.put(key, millis);
         }
     }
@@ -145,7 +145,7 @@ public class FirstTierCache implements CacheTier {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        if (values.containsKey(key)) {
+        if (containsKey(key)) {
             return deadlines.get(key);
         }
         return 0;
