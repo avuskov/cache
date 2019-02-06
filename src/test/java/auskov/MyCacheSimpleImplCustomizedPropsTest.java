@@ -9,5 +9,5 @@ public class MyCacheSimpleImplCustomizedPropsTest extends AbstractMyCacheCustomi
         return MyCacheSimpleImpl.createCash(props);
     }
 
-    //todo tests of max filesystem cache size
+    //todo tests of cache.tiers.put.to
 }

@@ -1,7 +1,5 @@
 package auskov;
 
-import org.ehcache.CachePersistenceException;
-
 import java.io.*;
 import java.util.Arrays;
 import java.util.InvalidPropertiesFormatException;
@@ -16,12 +14,13 @@ public class SecondTierCache implements CacheTier {
     private static final String WEIGHT_FILE_SUFFIX = ".weight";
     private static final String DEADLINE_FILE_SUFFIX = ".deadline";
 
-    private boolean open; //todo заперсистить
+    private boolean open;
     private long maxInMemoryBytes;
     private long currentCacheSizeBytes;
     private LongSupplier timeSupplier;
     private ToLongFunction<File> fileLengthEvaluator;
-    String storagePath;
+    private String storagePath;
+    private File storageDir;
 
     SecondTierCache(Properties props) throws InvalidPropertiesFormatException {
         maxInMemoryBytes = Long.parseLong(props.getProperty("cache.size.filesystem.bytes"));
@@ -32,11 +31,11 @@ public class SecondTierCache implements CacheTier {
         open = true;
         timeSupplier = System::currentTimeMillis;
         fileLengthEvaluator = (file -> file.length());
-        storagePath = "./second_tier_cache";
-        File f = new File(storagePath);
-        if (!f.exists()) {
-            f.mkdirs();
-        } else if (!f.isDirectory()) {
+        storagePath = props.getProperty("cache.filesystem.storage.path") + "/second_tier_cache/" + Thread.currentThread().getId() + "_" + timeSupplier.getAsLong(); //todo handle crashes
+        storageDir = new File(storagePath);
+        if (!storageDir.exists()) {
+            storageDir.mkdirs();
+        } else if (!storageDir.isDirectory()) {
             throw new InvalidPropertiesFormatException("Cache path " + storagePath + " is not a directory!");
         }
         currentCacheSizeBytes = 0;
@@ -53,27 +52,34 @@ public class SecondTierCache implements CacheTier {
             remove(key);
         }
         currentCacheSizeBytes += currentEntrySize;
-        File storageDir = new File(storagePath);
 
         while (currentCacheSizeBytes > maxInMemoryBytes) {
-            Arrays.stream(storageDir.list())
-                    .filter(fileName -> fileName.contains(VALUE_FILE_SUFFIX))
-                    .map(fileName -> fileName.substring(0, fileName.indexOf(VALUE_FILE_SUFFIX)))
-                    .mapToLong(foundStringKey -> Long.parseLong(foundStringKey))
-                    .forEach(foundKey -> {
-                        if (getDeadline(foundKey) <= timeSupplier.getAsLong()) {
-                            remove(foundKey);
-                        }
-                    });
+            removeAllExpiredEntries();
             if (currentCacheSizeBytes > maxInMemoryBytes) {
-                remove(Arrays.stream(storageDir.list())
-                        .filter(fileName -> fileName.contains(VALUE_FILE_SUFFIX))
-                        .map(fileName -> fileName.substring(0, fileName.indexOf(VALUE_FILE_SUFFIX)))
-                        .mapToLong(foundStringKey -> Long.parseLong(foundStringKey))
-                        .min()
-                        .getAsLong());
+                evictTheColdestEntry();
             }
         }
+    }
+
+    private void removeAllExpiredEntries() {
+        Arrays.stream(storageDir.list())
+                .filter(fileName -> fileName.contains(VALUE_FILE_SUFFIX))
+                .map(fileName -> fileName.substring(0, fileName.indexOf(VALUE_FILE_SUFFIX)))
+                .mapToLong(foundStringKey -> Long.parseLong(foundStringKey))
+                .forEach(foundKey -> {
+                    if (getDeadline(foundKey) <= timeSupplier.getAsLong()) {
+                        remove(foundKey);
+                    }
+                });
+    }
+
+    private void evictTheColdestEntry() {
+        remove(Arrays.stream(storageDir.list())
+                .filter(fileName -> fileName.contains(VALUE_FILE_SUFFIX))
+                .map(fileName -> fileName.substring(0, fileName.indexOf(VALUE_FILE_SUFFIX)))
+                .mapToLong(foundStringKey -> Long.parseLong(foundStringKey))
+                .min()
+                .getAsLong());
     }
 
     @Override
@@ -93,7 +99,6 @@ public class SecondTierCache implements CacheTier {
     @Override
     public void clear() {
         checkStateIsOpen();
-        File storageDir = new File(storagePath);
         if (storageDir.exists() && storageDir.isDirectory()) {
             Arrays.stream(storageDir.list())
                     .filter(fileName -> !fileName.startsWith("."))
@@ -109,7 +114,6 @@ public class SecondTierCache implements CacheTier {
     public void remove(long key) {
         checkStateIsOpen();
         long entrySize = getEntrySize(key);
-        File storageDir = new File(storagePath);
         if (storageDir.exists() && storageDir.isDirectory()) {
             Arrays.stream(storageDir.list())
                     .filter(fileName -> fileName.startsWith("" + key))
@@ -122,16 +126,17 @@ public class SecondTierCache implements CacheTier {
     }
 
     @Override
-    public void close() throws CachePersistenceException {
+    public void close() {
         checkStateIsOpen();
         clear();
-        open = false; //todo заперсистить
+        storageDir.delete();
+        open = false;
     }
 
     @Override
     public boolean containsKey(long key) {
         checkStateIsOpen();
-        File valueFile = new File(storagePath, key + VALUE_FILE_SUFFIX);
+        File valueFile = new File(storageDir, key + VALUE_FILE_SUFFIX);
         return valueFile.exists();
     }
 
@@ -141,6 +146,14 @@ public class SecondTierCache implements CacheTier {
         if (containsKey(key)) {
             long currentWeight = getWeight(key);
             writeLongToFile(++currentWeight, key + WEIGHT_FILE_SUFFIX);
+        }
+    }
+
+    @Override
+    public void setWeight(long key, long weight) {
+        checkStateIsOpen();
+        if (containsKey(key)) {
+            writeLongToFile(weight, key + WEIGHT_FILE_SUFFIX);
         }
     }
 
@@ -167,9 +180,9 @@ public class SecondTierCache implements CacheTier {
     public long getEntrySize(long key) {
         checkStateIsOpen();
         if (containsKey(key)) {
-            File value = new File(storagePath, key + VALUE_FILE_SUFFIX);
-            File weight = new File(storagePath, key + WEIGHT_FILE_SUFFIX);
-            File deadline = new File(storagePath, key + DEADLINE_FILE_SUFFIX);
+            File value = new File(storageDir, key + VALUE_FILE_SUFFIX);
+            File weight = new File(storageDir, key + WEIGHT_FILE_SUFFIX);
+            File deadline = new File(storageDir, key + DEADLINE_FILE_SUFFIX);
             return fileLengthEvaluator.applyAsLong(value) + fileLengthEvaluator.applyAsLong(weight) + fileLengthEvaluator.applyAsLong(deadline);
         }
         return 0;
@@ -192,7 +205,7 @@ public class SecondTierCache implements CacheTier {
     }
 
     private void writeObjectToFile(Serializable object, String fileName) {
-        File file = new File(storagePath, fileName);
+        File file = new File(storageDir, fileName);
         try (ObjectOutputStream stream = new ObjectOutputStream(new FileOutputStream(file))) {
             stream.writeObject(object);
             stream.flush();
@@ -204,7 +217,7 @@ public class SecondTierCache implements CacheTier {
     }
 
     private void writeLongToFile(long value, String fileName) {
-        File file = new File(storagePath, fileName);
+        File file = new File(storageDir, fileName);
         try (ObjectOutputStream stream = new ObjectOutputStream(new FileOutputStream(file))) {
             stream.writeLong(value);
             stream.flush();
@@ -216,7 +229,7 @@ public class SecondTierCache implements CacheTier {
     }
 
     private Object readObjectFromFile(String fileName) {
-        File valueFile = new File(storagePath, fileName);
+        File valueFile = new File(storageDir, fileName);
         Object object = null;
         try (ObjectInputStream valueInputStream = new ObjectInputStream(new FileInputStream(valueFile))) {
             object = valueInputStream.readObject();
@@ -229,7 +242,7 @@ public class SecondTierCache implements CacheTier {
     }
 
     private long readLongFromFile(String fileName) {
-        File file = new File(storagePath, fileName);
+        File file = new File(storageDir, fileName);
         long value = 0;
         try (ObjectInputStream valueInputStream = new ObjectInputStream(new FileInputStream(file))) {
             value = valueInputStream.readLong();

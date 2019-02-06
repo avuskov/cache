@@ -457,4 +457,32 @@ public class FirstTierCacheTest {
         firstTierCache.setCurrentTimeSupplier(() -> 150L);
         assertNull(firstTierCache.get(key));
     }
+
+    @Test
+    public void setWeightShouldChangeTheCurrentWeightOfTheSelectedObjectToTheSpecifiedOne() {
+        long key = 0;
+        long weight = 125L;
+        firstTierCache.put(key, "An Object");
+        assertEquals(0, firstTierCache.getWeight(key));
+        firstTierCache.setWeight(key, weight);
+        assertEquals(weight, firstTierCache.getWeight(key));
+    }
+
+    @Test
+    public void setWeightShouldDoNothingIfTheObjectDoesNotExist() {
+        long key = 0;
+        firstTierCache.setWeight(key, 123);
+        assertEquals(0, firstTierCache.getWeight(key));
+    }
+
+    @Test
+    public void setWeightShouldSetTheWeightEvenIfTheObjectHasExpired() {
+        firstTierCache.setCurrentTimeSupplier(() -> 100L);
+        long key = 0;
+        long weight = 123;
+        firstTierCache.put(key, "An Object");
+        firstTierCache.setDeadline(key, 50L);
+        firstTierCache.setWeight(key, weight);
+        assertEquals(weight, firstTierCache.getWeight(key));
+    }
 }

@@ -15,6 +15,7 @@ public class FirstTierCache implements CacheTier {
     private Map<Long, Long> deadlines;
     private long maxInMemoryEntries;
     private LongSupplier timeSupplier;
+    private CacheTier lowerLevel;
 
     FirstTierCache(Properties props) {
         maxInMemoryEntries = Long.parseLong(props.getProperty("cache.size.in.memory.entries"));
@@ -36,20 +37,34 @@ public class FirstTierCache implements CacheTier {
             throw new IllegalStateException("The cache is closed!");
         }
         while (values.size() >= maxInMemoryEntries) {
-            deadlines.entrySet().stream()
-                    .filter(entry -> entry.getValue() <= timeSupplier.getAsLong())
-                    .forEach(entry -> remove(entry.getKey()));
+            removeAllExpiredEntries();
             if (values.size() >= maxInMemoryEntries) {
-                remove(weights.entrySet().stream()
-                        .min(Comparator.comparing(entry -> entry.getValue()))
-                        .get()
-                        .getKey());
+                evictTheColdestEntry();
             }
         }
 
         weights.put(key, 0L);
         values.put(key, object);
         deadlines.put(key, Long.MAX_VALUE);
+    }
+
+    private void removeAllExpiredEntries() {
+        deadlines.entrySet().stream()
+                .filter(entry -> entry.getValue() <= timeSupplier.getAsLong())
+                .forEach(entry -> remove(entry.getKey()));
+    }
+
+    private void evictTheColdestEntry() {
+        long key = weights.entrySet().stream()
+                .min(Comparator.comparing(entry -> entry.getValue()))
+                .get()
+                .getKey();
+        if(lowerLevel != null) {
+            lowerLevel.put(key, values.get(key));
+            lowerLevel.setDeadline(key, weights.get(key));
+            lowerLevel.setWeight(key, deadlines.get(key));
+        }
+        remove(key);
     }
 
     @Override
@@ -120,6 +135,16 @@ public class FirstTierCache implements CacheTier {
     }
 
     @Override
+    public void setWeight(long key, long weight) {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
+        if (containsKey(key)) {
+            weights.put(key, weight);
+        }
+    }
+
+    @Override
     public long getWeight(long key) {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
@@ -151,6 +176,9 @@ public class FirstTierCache implements CacheTier {
         return 0;
     }
 
+    public void setLowerLevelCache(CacheTier cacheTier) {
+        lowerLevel = cacheTier;
+    }
     void setCurrentTimeSupplier(LongSupplier timeSupplier) {
         this.timeSupplier = timeSupplier;
     }

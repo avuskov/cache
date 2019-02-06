@@ -18,11 +18,12 @@ public class SecondTierCacheTest {
     public void setUp() throws InvalidPropertiesFormatException {
         Properties props = new Properties();
         props.setProperty("cache.size.filesystem.bytes", "1000");
+        props.setProperty("cache.filesystem.storage.path", ".");
         secondTierCache = new SecondTierCache(props);
     }
 
     @After
-    public void tearDown() throws CachePersistenceException {
+    public void tearDown() {
         try {
             secondTierCache.close();
         } catch (IllegalStateException e) {
@@ -508,4 +509,31 @@ public class SecondTierCacheTest {
         assertEquals(321L, secondTierCache.getEntrySize(key));
     }
 
+    @Test
+    public void setWeightShouldChangeTheCurrentWeightOfTheSelectedObjectToTheSpecifiedOne() {
+        long key = 0;
+        long weight = 125L;
+        secondTierCache.put(key, "An Object");
+        assertEquals(0, secondTierCache.getWeight(key));
+        secondTierCache.setWeight(key, weight);
+        assertEquals(weight, secondTierCache.getWeight(key));
+    }
+
+    @Test
+    public void setWeightShouldDoNothingIfTheObjectDoesNotExist() {
+        long key = 0;
+        secondTierCache.setWeight(key, 123);
+        assertEquals(0, secondTierCache.getWeight(key));
+    }
+
+    @Test
+    public void setWeightShouldSetTheWeightEvenIfTheObjectHasExpired() {
+        secondTierCache.setCurrentTimeSupplier(() -> 100L);
+        long key = 0;
+        long weight = 123;
+        secondTierCache.put(key, "An Object");
+        secondTierCache.setDeadline(key, 50L);
+        secondTierCache.setWeight(key, weight);
+        assertEquals(weight, secondTierCache.getWeight(key));
+    }
 }

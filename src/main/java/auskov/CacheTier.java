@@ -13,11 +13,13 @@ interface CacheTier {
 
     void remove(long key);
 
-    void close() throws CachePersistenceException;
+    void close();
 
     boolean containsKey(long key);
 
     void incrementWeight(long key);
+
+    void setWeight(long key, long weight);
 
     long getWeight(long key);
 

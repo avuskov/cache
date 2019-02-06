@@ -6,17 +6,16 @@ import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
 
 public class MyCacheSimpleImpl implements MyCache {
-    //todo встроить второй слой
-
     private long nextId;
     private boolean open;
-    private boolean needToCleanFS;
     private FirstTierCache levelOne;
+    private SecondTierCache levelTwo;
 
-    private String memoryTier;
-    private String filesystemTier;
+    private boolean memoryTierEnabled;
+    private boolean filesystemTierEnabled;
     private String expirationPolicy;
     private long expirationMillis;
+    private boolean putToBottom;
 
     public static MyCacheSimpleImpl createCash() throws IOException {
         Properties props = new Properties();
@@ -29,20 +28,24 @@ public class MyCacheSimpleImpl implements MyCache {
     }
 
     private MyCacheSimpleImpl(Properties props) throws InvalidPropertiesFormatException {
-        memoryTier = props.getProperty("cache.tiers.memory");
-        filesystemTier = props.getProperty("cache.tiers.filesystem");
+        memoryTierEnabled = "enable".equals(props.getProperty("cache.tiers.memory"));
+        filesystemTierEnabled = "enable".equals(props.getProperty("cache.tiers.filesystem"));
         expirationPolicy = props.getProperty("cache.expiration.policy");
         expirationMillis = Long.parseLong(props.getProperty("cache.expiration.millis"));
+        putToBottom = "bottom".equals(props.getProperty("cache.tiers.put.to"));
 
-        if ("enable".equals(memoryTier)) {
+        if (!memoryTierEnabled && !filesystemTierEnabled) {
+            throw new InvalidPropertiesFormatException("At least one caching tier should be enabled!");
+        }
+        if (memoryTierEnabled) {
             levelOne = new FirstTierCache(props);
         }
-        if ("enable".equals(filesystemTier)) {
+        if (filesystemTierEnabled) {
+            levelTwo = new SecondTierCache(props);
 
-            needToCleanFS = true;
         }
-        if (!"enable".equals(memoryTier) && !"enable".equals(filesystemTier)) {
-            throw new InvalidPropertiesFormatException("At least one caching tier should be enabled!");
+        if(memoryTierEnabled && filesystemTierEnabled) {
+            levelOne.setLowerLevelCache(levelTwo);
         }
 
         nextId = 0;
@@ -54,9 +57,10 @@ public class MyCacheSimpleImpl implements MyCache {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        levelOne.put(nextId, object);
+        CacheTier putTier = filesystemTierEnabled && putToBottom || !memoryTierEnabled ? levelTwo : levelOne;
+        putTier.put(nextId, object);
         if ("time-to-live".equals(expirationPolicy) || "time-to-idle".equals(expirationPolicy)) {
-            levelOne.setDeadline(nextId, System.currentTimeMillis() + expirationMillis);
+            putTier.setDeadline(nextId, System.currentTimeMillis() + expirationMillis);
         }
         return nextId++;
     }
@@ -66,7 +70,18 @@ public class MyCacheSimpleImpl implements MyCache {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        Object result = levelOne.get(key);
+        Object result = null;
+        if (memoryTierEnabled) {
+            result = levelOne.get(key);
+        }
+        if (result == null && filesystemTierEnabled) {
+            result = levelTwo.get(key);
+            if (result != null && memoryTierEnabled) {
+                levelOne.put(key, (Serializable) result);
+                levelOne.setDeadline(key, levelTwo.getDeadline(key));
+                levelOne.setWeight(key, levelTwo.getWeight(key));
+            }
+        }
         if (result != null && "time-to-idle".equals(expirationPolicy)) {
             levelOne.setDeadline(key, System.currentTimeMillis() + expirationMillis);
         }
@@ -78,7 +93,8 @@ public class MyCacheSimpleImpl implements MyCache {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        levelOne.clear();
+        if (memoryTierEnabled) levelOne.clear();
+        if (filesystemTierEnabled) levelTwo.clear();
         nextId = 0;
     }
 
@@ -87,7 +103,8 @@ public class MyCacheSimpleImpl implements MyCache {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        levelOne.remove(key);
+        if (memoryTierEnabled) levelOne.remove(key);
+        if (filesystemTierEnabled) levelTwo.remove(key);
     }
 
     @Override
@@ -96,12 +113,11 @@ public class MyCacheSimpleImpl implements MyCache {
             throw new IllegalStateException("The cache is closed!");
         }
 
+        if (memoryTierEnabled) levelOne.close();
         levelOne = null;
+        if (filesystemTierEnabled) levelTwo.close();
+        levelTwo = null;
         open = false;
-        if (needToCleanFS) {
-// todo               ((PersistentCacheManager) cacheManager).destroy();
-        }
-
     }
 
     @Override
@@ -109,10 +125,7 @@ public class MyCacheSimpleImpl implements MyCache {
         if (!open) {
             throw new IllegalStateException("The cache is closed!");
         }
-        return levelOne.containsKey(key);
-    }
-
-    private String getStoragePath() {
-        return ".";
+        return (memoryTierEnabled && levelOne.containsKey(key))
+                || (filesystemTierEnabled && levelTwo.containsKey(key));
     }
 }

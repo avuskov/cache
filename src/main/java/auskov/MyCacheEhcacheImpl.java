@@ -43,6 +43,7 @@ public class MyCacheEhcacheImpl implements MyCache {
         long maxFilesystemCacheBytes = Long.parseLong(props.getProperty("cache.size.filesystem.bytes"));
         String expirationPolicy = props.getProperty("cache.expiration.policy");
         long expirationMillis = Long.parseLong(props.getProperty("cache.expiration.millis"));
+        String storagePath = props.getProperty("cache.filesystem.storage.path");
 
         ResourcePoolsBuilder resources = ResourcePoolsBuilder.newResourcePoolsBuilder();
         CacheManagerBuilder cacheManagerBuilder = CacheManagerBuilder.newCacheManagerBuilder();
@@ -51,7 +52,7 @@ public class MyCacheEhcacheImpl implements MyCache {
             resources = resources.heap(maxInMemoryEntries, EntryUnit.ENTRIES);
         }
         if ("enable".equals(filesystemTier)) {
-            cacheManagerBuilder = cacheManagerBuilder.with(CacheManagerBuilder.persistence(new File(getStoragePath(), "myData")));
+            cacheManagerBuilder = cacheManagerBuilder.with(CacheManagerBuilder.persistence(new File(storagePath, "myData")));
             resources = resources.disk(maxFilesystemCacheBytes, MemoryUnit.B, true);
             needToCleanFS = true;
         }
