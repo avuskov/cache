@@ -1,5 +1,6 @@
 package auskov;
 
+import java.io.Closeable;
 import java.io.Serializable;
 import java.util.Comparator;
 import java.util.Map;
@@ -7,7 +8,7 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
-public class FirstTierCache implements CacheTier {
+public class FirstTierCache extends CacheTier implements Closeable, AutoCloseable {
     //todo add logging, make 'put' atomic
     private boolean open;
     private Map<Long, Serializable> values;

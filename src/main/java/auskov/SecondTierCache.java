@@ -7,7 +7,7 @@ import java.util.Properties;
 import java.util.function.LongSupplier;
 import java.util.function.ToLongFunction;
 
-public class SecondTierCache implements CacheTier {
+public class SecondTierCache extends CacheTier implements Closeable, AutoCloseable {
     //todo add logging, make 'put' atomic
 
     private static final String VALUE_FILE_SUFFIX = ".value";

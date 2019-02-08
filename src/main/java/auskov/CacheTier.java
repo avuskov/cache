@@ -1,29 +1,35 @@
 package auskov;
 
-import org.ehcache.CachePersistenceException;
-
+import java.io.Closeable;
 import java.io.Serializable;
+import java.util.function.LongSupplier;
 
-interface CacheTier {
-    void put(long key, Serializable object);
+abstract class CacheTier implements Closeable, AutoCloseable {
+    protected LongSupplier timeSupplier;
 
-    Object get(long key);
+    public abstract void put(long key, Serializable object);
 
-    void clear();
+    public abstract Object get(long key);
 
-    void remove(long key);
+    public abstract void clear();
 
-    void close();
+    public abstract void remove(long key);
 
-    boolean containsKey(long key);
+    public abstract void close();
 
-    void incrementWeight(long key);
+    public abstract boolean containsKey(long key);
 
-    void setWeight(long key, long weight);
+    public abstract void incrementWeight(long key);
 
-    long getWeight(long key);
+    public abstract void setWeight(long key, long weight);
 
-    void setDeadline (long key, long millis);
+    public abstract long getWeight(long key);
 
-    long getDeadline(long key);
+    public abstract void setDeadline (long key, long millis);
+
+    public abstract long getDeadline(long key);
+
+    void setCurrentTimeSupplier(LongSupplier timeSupplier) {
+        this.timeSupplier = timeSupplier;
+    }
 }
