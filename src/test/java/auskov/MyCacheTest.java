@@ -8,10 +8,13 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.io.Serializable;
+import java.util.logging.Logger;
 
 import static org.junit.Assert.*;
 
-public abstract class AbstractMyCacheTest {
+public abstract class MyCacheTest {
+    private static final Logger LOG = Logger.getLogger(MyCacheTest.class.getName());
+
     private MyCache myCache;
 
     @Before
@@ -24,7 +27,7 @@ public abstract class AbstractMyCacheTest {
         try {
             myCache.close();
         } catch (IllegalStateException e) {
-            //that's ok, the cache has already been closed
+            LOG.fine("Closing an already closed resource.");
         }
     }
 

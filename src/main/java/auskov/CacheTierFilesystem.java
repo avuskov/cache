@@ -7,7 +7,7 @@ import java.util.Properties;
 import java.util.function.LongSupplier;
 import java.util.function.ToLongFunction;
 
-public class SecondTierCache extends CacheTier implements Closeable, AutoCloseable {
+public class CacheTierFilesystem extends CacheTier implements Closeable, AutoCloseable {
     //todo add logging, make 'put' atomic
 
     private static final String VALUE_FILE_SUFFIX = ".value";
@@ -22,7 +22,7 @@ public class SecondTierCache extends CacheTier implements Closeable, AutoCloseab
     private String storagePath;
     private File storageDir;
 
-    SecondTierCache(Properties props) throws InvalidPropertiesFormatException {
+    CacheTierFilesystem(Properties props) throws InvalidPropertiesFormatException {
         maxInMemoryBytes = Long.parseLong(props.getProperty("cache.size.filesystem.bytes"));
         if (maxInMemoryBytes <= 0) {
             throw new IllegalArgumentException("Size must be greater than 0");

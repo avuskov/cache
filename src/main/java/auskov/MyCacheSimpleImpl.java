@@ -8,8 +8,8 @@ import java.util.Properties;
 public class MyCacheSimpleImpl implements MyCache {
     private long nextId;
     private boolean open;
-    private FirstTierCache levelOne;
-    private SecondTierCache levelTwo;
+    private CacheTierMemory levelOne;
+    private CacheTierFilesystem levelTwo;
 
     private boolean memoryTierEnabled;
     private boolean filesystemTierEnabled;
@@ -38,10 +38,10 @@ public class MyCacheSimpleImpl implements MyCache {
             throw new InvalidPropertiesFormatException("At least one caching tier should be enabled!");
         }
         if (memoryTierEnabled) {
-            levelOne = new FirstTierCache(props);
+            levelOne = new CacheTierMemory(props);
         }
         if (filesystemTierEnabled) {
-            levelTwo = new SecondTierCache(props);
+            levelTwo = new CacheTierFilesystem(props);
 
         }
         if(memoryTierEnabled && filesystemTierEnabled) {

@@ -8,7 +8,7 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
-public class FirstTierCache extends CacheTier implements Closeable, AutoCloseable {
+public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseable {
     //todo add logging, make 'put' atomic
     private boolean open;
     private Map<Long, Serializable> values;
@@ -18,7 +18,7 @@ public class FirstTierCache extends CacheTier implements Closeable, AutoCloseabl
     private LongSupplier timeSupplier;
     private CacheTier lowerLevel;
 
-    FirstTierCache(Properties props) {
+    CacheTierMemory(Properties props) {
         maxInMemoryEntries = Long.parseLong(props.getProperty("cache.size.in.memory.entries"));
 
         if (maxInMemoryEntries <= 0) {

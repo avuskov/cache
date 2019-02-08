@@ -9,10 +9,13 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
+import java.util.logging.Logger;
 
 import static org.junit.Assert.*;
 
-public abstract class AbstractMyCacheCustomizedPropsTest {
+public abstract class MyCacheCustomizedPropsTest {
+    private static final Logger LOG = Logger.getLogger(MyCacheCustomizedPropsTest.class.getName());
+
     private MyCache myCache;
     private Properties props;
 
@@ -27,7 +30,7 @@ public abstract class AbstractMyCacheCustomizedPropsTest {
         try {
             myCache.close();
         } catch (NullPointerException e) {
-            //it's ok
+            LOG.fine("Closing a cache, that was not created.");
         }
     }
 
