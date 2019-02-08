@@ -6,16 +6,16 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.LongSupplier;
 
 public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseable {
-    //todo add logging, make 'put' atomic
-    private boolean open;
+    //todo add logging
+    //todo add thread safety
+    //pull common logic to the parent
+
     private Map<Long, Serializable> values;
     private Map<Long, Long> weights;
     private Map<Long, Long> deadlines;
     private long maxInMemoryEntries;
-    private LongSupplier timeSupplier;
     private CacheTier lowerLevel;
 
     CacheTierMemory(Properties props) {
@@ -28,15 +28,13 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
         values = new ConcurrentHashMap<>();
         weights = new ConcurrentHashMap<>();
         deadlines = new ConcurrentHashMap<>();
-        open = true;
-        timeSupplier = System::currentTimeMillis;
+        super.open = true;
+        super.timeSupplier = System::currentTimeMillis;
     }
 
     @Override
     public void put(long key, Serializable object) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         while (values.size() >= maxInMemoryEntries) {
             removeAllExpiredEntries();
             if (values.size() >= maxInMemoryEntries) {
@@ -51,7 +49,7 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     private void removeAllExpiredEntries() {
         deadlines.entrySet().stream()
-                .filter(entry -> entry.getValue() <= timeSupplier.getAsLong())
+                .filter(entry -> entry.getValue() <= super.timeSupplier.getAsLong())
                 .forEach(entry -> remove(entry.getKey()));
     }
 
@@ -70,13 +68,11 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     @Override
     public Object get(long key) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         if (!values.containsKey(key)) {
             return null;
         }
-        if (timeSupplier.getAsLong() >= deadlines.get(key)) {
+        if (super.timeSupplier.getAsLong() >= deadlines.get(key)) {
             remove(key);
             return null;
         }
@@ -87,9 +83,7 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     @Override
     public void clear() {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         values.clear();
         weights.clear();
         deadlines.clear();
@@ -97,9 +91,7 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     @Override
     public void remove(long key) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         values.remove(key);
         weights.remove(key);
         deadlines.remove(key);
@@ -107,28 +99,22 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     @Override
     public void close() {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         values = null;
         weights = null;
         deadlines = null;
-        open = false;
+        super.close();
     }
 
     @Override
     public boolean containsKey(long key) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         return values.containsKey(key);
     }
 
     @Override
     public void incrementWeight(long key) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         if (containsKey(key)) {
             long curWeight = weights.get(key);
             weights.put(key, ++curWeight);
@@ -137,9 +123,7 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     @Override
     public void setWeight(long key, long weight) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         if (containsKey(key)) {
             weights.put(key, weight);
         }
@@ -147,9 +131,7 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     @Override
     public long getWeight(long key) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         if (containsKey(key)) {
             return weights.get(key);
         }
@@ -158,9 +140,7 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     @Override
     public void setDeadline(long key, long millis) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         if (containsKey(key)) {
             deadlines.put(key, millis);
         }
@@ -168,9 +148,7 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     @Override
     public long getDeadline(long key) {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
+        checkStateIsOpen();
         if (containsKey(key)) {
             return deadlines.get(key);
         }
@@ -179,8 +157,5 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
 
     public void setLowerLevelCache(CacheTier cacheTier) {
         lowerLevel = cacheTier;
-    }
-    void setCurrentTimeSupplier(LongSupplier timeSupplier) {
-        this.timeSupplier = timeSupplier;
     }
 }

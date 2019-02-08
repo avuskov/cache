@@ -6,6 +6,7 @@ import java.util.function.LongSupplier;
 
 abstract class CacheTier implements Closeable, AutoCloseable {
     protected LongSupplier timeSupplier;
+    protected boolean open;
 
     public abstract void put(long key, Serializable object);
 
@@ -15,7 +16,9 @@ abstract class CacheTier implements Closeable, AutoCloseable {
 
     public abstract void remove(long key);
 
-    public abstract void close();
+    public void close() {
+        open = false;
+    }
 
     public abstract boolean containsKey(long key);
 
@@ -29,7 +32,14 @@ abstract class CacheTier implements Closeable, AutoCloseable {
 
     public abstract long getDeadline(long key);
 
+    protected void checkStateIsOpen() {
+        if (!open) {
+            throw new IllegalStateException("The cache is closed!");
+        }
+    }
+
     void setCurrentTimeSupplier(LongSupplier timeSupplier) {
+        checkStateIsOpen();
         this.timeSupplier = timeSupplier;
     }
 }

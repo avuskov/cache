@@ -4,20 +4,20 @@ import java.io.*;
 import java.util.Arrays;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
-import java.util.function.LongSupplier;
 import java.util.function.ToLongFunction;
 
 public class CacheTierFilesystem extends CacheTier implements Closeable, AutoCloseable {
-    //todo add logging, make 'put' atomic
+    //todo add logging
+    //todo add thread safety
+    //pull common logic to the parent
 
     private static final String VALUE_FILE_SUFFIX = ".value";
     private static final String WEIGHT_FILE_SUFFIX = ".weight";
     private static final String DEADLINE_FILE_SUFFIX = ".deadline";
 
-    private boolean open;
+
     private long maxInMemoryBytes;
     private long currentCacheSizeBytes;
-    private LongSupplier timeSupplier;
     private ToLongFunction<File> fileLengthEvaluator;
     private String storagePath;
     private File storageDir;
@@ -28,10 +28,11 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
             throw new IllegalArgumentException("Size must be greater than 0");
         }
 
-        open = true;
-        timeSupplier = System::currentTimeMillis;
+        super.open = true;
+        super.timeSupplier = System::currentTimeMillis;
         fileLengthEvaluator = (file -> file.length());
-        storagePath = props.getProperty("cache.filesystem.storage.path") + "/second_tier_cache/" + Thread.currentThread().getId() + "_" + timeSupplier.getAsLong(); //todo handle crashes
+        //todo throw an exception on null storage path
+        storagePath = props.getProperty("cache.filesystem.storage.path") + "/second_tier_cache/" + Thread.currentThread().getId() + "_" + super.timeSupplier.getAsLong();
         storageDir = new File(storagePath);
         if (!storageDir.exists()) {
             storageDir.mkdirs();
@@ -67,7 +68,7 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
                 .map(fileName -> fileName.substring(0, fileName.indexOf(VALUE_FILE_SUFFIX)))
                 .mapToLong(foundStringKey -> Long.parseLong(foundStringKey))
                 .forEach(foundKey -> {
-                    if (getDeadline(foundKey) <= timeSupplier.getAsLong()) {
+                    if (getDeadline(foundKey) <= super.timeSupplier.getAsLong()) {
                         remove(foundKey);
                     }
                 });
@@ -88,7 +89,7 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
         if (!containsKey(key)) {
             return null;
         }
-        if (timeSupplier.getAsLong() >= getDeadline(key)) {
+        if (super.timeSupplier.getAsLong() >= getDeadline(key)) {
             remove(key);
             return null;
         }
@@ -130,7 +131,7 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
         checkStateIsOpen();
         clear();
         storageDir.delete();
-        open = false;
+        super.close();
     }
 
     @Override
@@ -188,20 +189,9 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
         return 0;
     }
 
-    void setCurrentTimeSupplier(LongSupplier timeSupplier) {
-        checkStateIsOpen();
-        this.timeSupplier = timeSupplier;
-    }
-
     void setFileLenghtEvaluator(ToLongFunction<File> fileLenghtEvaluator) {
         checkStateIsOpen();
         this.fileLengthEvaluator = fileLenghtEvaluator;
-    }
-
-    private void checkStateIsOpen() {
-        if (!open) {
-            throw new IllegalStateException("The cache is closed!");
-        }
     }
 
     private void writeObjectToFile(Serializable object, String fileName) {
