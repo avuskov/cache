@@ -5,11 +5,15 @@ import java.util.Arrays;
 import java.util.InvalidPropertiesFormatException;
 import java.util.Properties;
 import java.util.function.ToLongFunction;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class CacheTierFilesystem extends CacheTier implements Closeable, AutoCloseable {
-    //todo add logging
+    //todo add logging tests
     //todo add thread safety
-    //pull common logic to the parent
+    //todo pull common logic to the parent
+
+    private static final Logger LOG = Logger.getLogger(CacheTierFilesystem.class.getName());
 
     private static final String VALUE_FILE_SUFFIX = ".value";
     private static final String WEIGHT_FILE_SUFFIX = ".weight";
@@ -25,19 +29,23 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
     CacheTierFilesystem(Properties props) throws InvalidPropertiesFormatException {
         maxInMemoryBytes = Long.parseLong(props.getProperty("cache.size.filesystem.bytes"));
         if (maxInMemoryBytes <= 0) {
-            throw new IllegalArgumentException("Size must be greater than 0");
+            throw new InvalidPropertiesFormatException("Size of the cache tier must be greater than 0!");
+        }
+        if (props.get("cache.filesystem.storage.path") == null) {
+            throw new InvalidPropertiesFormatException("Storage path can't be null!");
+        }
+        if (!new File(props.getProperty("cache.filesystem.storage.path")).isDirectory()) {
+            throw new InvalidPropertiesFormatException("Cache storage path is not a directory!");
         }
 
         super.open = true;
         super.timeSupplier = System::currentTimeMillis;
         fileLengthEvaluator = (file -> file.length());
-        //todo throw an exception on null storage path
-        storagePath = props.getProperty("cache.filesystem.storage.path") + "/second_tier_cache/" + Thread.currentThread().getId() + "_" + super.timeSupplier.getAsLong();
+        storagePath = props.getProperty("cache.filesystem.storage.path") +
+                "/second_tier_cache/" + Thread.currentThread().getId() + "_" + super.timeSupplier.getAsLong();
         storageDir = new File(storagePath);
         if (!storageDir.exists()) {
             storageDir.mkdirs();
-        } else if (!storageDir.isDirectory()) {
-            throw new InvalidPropertiesFormatException("Cache path " + storagePath + " is not a directory!");
         }
         currentCacheSizeBytes = 0;
     }
@@ -199,10 +207,8 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
         try (ObjectOutputStream stream = new ObjectOutputStream(new FileOutputStream(file))) {
             stream.writeObject(object);
             stream.flush();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Failed attempt to write the object to the file " + fileName, e);
         }
     }
 
@@ -211,10 +217,8 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
         try (ObjectOutputStream stream = new ObjectOutputStream(new FileOutputStream(file))) {
             stream.writeLong(value);
             stream.flush();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Failed attempt to write the long value to the file " + fileName, e);
         }
     }
 
@@ -224,9 +228,9 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
         try (ObjectInputStream valueInputStream = new ObjectInputStream(new FileInputStream(valueFile))) {
             object = valueInputStream.readObject();
         } catch (FileNotFoundException e) {
-            //it's ok, we'll just return the default value
+            LOG.fine("The file " + fileName + "does not exist");
         } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
+            LOG.log(Level.WARNING, "Failed attempt to read the object from the file " + fileName, e);
         }
         return object;
     }
@@ -237,9 +241,9 @@ public class CacheTierFilesystem extends CacheTier implements Closeable, AutoClo
         try (ObjectInputStream valueInputStream = new ObjectInputStream(new FileInputStream(file))) {
             value = valueInputStream.readLong();
         } catch (FileNotFoundException e) {
-            //it's ok, we'll just return the default value
+            LOG.fine("The file " + fileName + "does not exist");
         } catch (IOException e) {
-            e.printStackTrace();
+            LOG.log(Level.WARNING, "Failed attempt to read the long value from the file " + fileName, e);
         }
         return value;
     }

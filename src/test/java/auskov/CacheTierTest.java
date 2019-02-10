@@ -22,6 +22,7 @@ public abstract class CacheTierTest {
     protected List<Closeable> resourceRegistry;
 
     protected abstract CacheTier createCacheTier(Properties props);
+
     protected abstract CacheTier createCacheTierWithThreeObjectsCapacityAndCurrentTime100();
 
     @Before

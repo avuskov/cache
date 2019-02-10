@@ -3,14 +3,14 @@ package auskov;
 import java.io.Closeable;
 import java.io.Serializable;
 import java.util.Comparator;
+import java.util.InvalidPropertiesFormatException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseable {
-    //todo add logging
     //todo add thread safety
-    //pull common logic to the parent
+    //todo pull common logic to the parent
 
     private Map<Long, Serializable> values;
     private Map<Long, Long> weights;
@@ -18,11 +18,11 @@ public class CacheTierMemory extends CacheTier implements Closeable, AutoCloseab
     private long maxInMemoryEntries;
     private CacheTier lowerLevel;
 
-    CacheTierMemory(Properties props) {
+    CacheTierMemory(Properties props) throws InvalidPropertiesFormatException {
         maxInMemoryEntries = Long.parseLong(props.getProperty("cache.size.in.memory.entries"));
 
         if (maxInMemoryEntries <= 0) {
-            throw new IllegalArgumentException("Size must be greater than 0");
+            throw new InvalidPropertiesFormatException("Size of the cache tier must be greater than 0!");
         }
 
         values = new ConcurrentHashMap<>();
